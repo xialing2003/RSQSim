@@ -1,3 +1,4 @@
+import time
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -5,7 +6,7 @@ import matplotlib.pyplot as plt
 # Parameters
 # =========================
 
-istepmax = 1_000_000
+istepmax = 1_000_00
 # a/b
 aob = 0.8
 # 1 - a/b
@@ -26,7 +27,7 @@ nel = 356
 # Load elastic kernel
 # =========================
 
-Kijfile = np.loadtxt("Kij_32_1")
+Kijfile = np.loadtxt("../results/Kij_32_1")
 Kij = Kijfile[:, 1] * LboDx
 Kii = Kij[0]
 omKii = 1.0 - Kii
@@ -36,14 +37,14 @@ omKii = 1.0 - Kii
 # =========================
 
 indx = np.zeros(nel, dtype=int)
-Dtau = np.ones(nel) * Dtaubg
-Dtaup = np.ones(nel) * Dtaupinit
-taudot = np.ones(nel) * taudotbg
-q = np.ones(nel) * qbg
-slip = np.zeros(nel)
-Dt = np.ones(nel) * 9999
-rate = np.ones(nel) * aob
-V0 = np.ones(nel)
+Dtau = np.ones(nel, dtype=np.float32) * Dtaubg
+Dtaup = np.ones(nel, dtype=np.float32) * Dtaupinit
+taudot = np.ones(nel, dtype=np.float32) * taudotbg
+q = np.ones(nel, dtype=np.float32) * qbg
+slip = np.zeros(nel, dtype=np.float32)
+Dt = np.ones(nel, dtype=np.float32) * 9999
+rate = np.ones(nel, dtype=np.float32) * aob
+V0 = np.ones(nel, dtype=np.float32)
 
 timistep = np.zeros(istepmax)
 hist2 = []
@@ -55,7 +56,7 @@ indx[:m] = 2
 # initial stressing rate
 for i in range(nel):
     for j in range(m):
-        taudot[i] += Veq*Kij(abs(i-j) + 1)
+        taudot[i] += Veq * Kij[abs(i-j)]
 
 tim = 0.0
 istep = 0
@@ -71,6 +72,8 @@ snapshot_times = []
 # =========================
 # Time stepping loop
 # =========================
+
+start_time = time.time()
 
 while istep < istepmax and not stopped:
     istep += 1
@@ -123,7 +126,7 @@ while istep < istepmax and not stopped:
     elif indx[ichange] == 1:
         indx[ichange] = 2
         ico = 1
-        if ichange == nel -1:
+        if ichange == nel - 1:
             stopped = True
         
     else:
@@ -149,7 +152,7 @@ while istep < istepmax and not stopped:
             else:
                 V0m1 = (
                     (1.0 / V0[i] + omKii / taudot[i])
-                    * np.exp(-taudot[i * Dtmin / rate[i]])
+                    * np.exp(-taudot[i] * Dtmin / rate[i])
                     - omKii / taudot[i]
                 )
                 V0[i] = 1.0 / V0m1
@@ -161,7 +164,7 @@ while istep < istepmax and not stopped:
                 slip[i] += Veq * Dtmin
             q[i] = 1.0 / Veq
 
-        taudot[i] += ico * Veq * Kij[abs(i - ichange) + 1]
+        taudot[i] += ico * Veq * Kij[abs(i - ichange)]
 
         if indx[i] == 2:
             ifront = i
@@ -184,6 +187,9 @@ while istep < istepmax and not stopped:
     if Dtmin < 0:
         print("Negative Dt:", istep, ichange, Dtmin)
 
+end_time = time.time()
+print(f"Total computation time: {end_time - start_time:.2f} seconds")
+
 # =========================
 # Plot
 # =========================
@@ -196,7 +202,7 @@ plt.figure(figsize=(8, 10))
 plt.subplot(2, 1, 2)
 plt.plot(hist2[:, 0], hist2[:, 1], 'r.', markersize=1)
 plt.plot(hist1[:, 0], hist1[:, 1], 'k.', markersize=1)
-plt.slabel("Position")
+plt.xlabel("Position")
 plt.ylabel("Time")
 
 plt.savefig('../results/hist.jpg')
