@@ -36,17 +36,19 @@ omKii = 1.0 - Kii
 # Initialization
 # =========================
 
+indices = np.arange(nel)
 indx = np.zeros(nel, dtype=int)
-Dtau = np.ones(nel, dtype=np.float32) * Dtaubg
-Dtaup = np.ones(nel, dtype=np.float32) * Dtaupinit
-taudot = np.ones(nel, dtype=np.float32) * taudotbg
-q = np.ones(nel, dtype=np.float32) * qbg
-slip = np.zeros(nel, dtype=np.float32)
-Dt = np.ones(nel, dtype=np.float32) * 9999
-rate = np.ones(nel, dtype=np.float32) * aob
-V0 = np.ones(nel, dtype=np.float32)
+Dtau = np.ones(nel) * Dtaubg
+Dtaup = np.ones(nel) * Dtaupinit
+taudot = np.ones(nel) * taudotbg
+q = np.ones(nel) * qbg
+slip = np.zeros(nel)
+Dt = np.ones(nel) * 9999
+rate = np.ones(nel) * aob
+V0 = np.ones(nel)
 
 timistep = np.zeros(istepmax)
+ifront = -1
 hist2 = []
 hist1 = []
 
@@ -82,34 +84,62 @@ while istep < istepmax and not stopped:
         stopped = True
 
     # -------- compute Dt --------
-    for i in range(nel):
+    # -------- compute Dt --------
+    mask0 = indx == 0
+    mask1 = indx == 1
+    mask2 = indx == 2
 
-        if indx[i] == 0: # Dt01
-            Dttest = 0.0
-            Dt[i] = ((omaob * np.log(Veq * q[i])) - Dtau[i]) / taudot[i]
-            while abs(Dt[i] - Dttest) > 1e-5 * abs(Dt[i]):
-                Dttest = Dt[i]
-                Dt[i] = ((omaob * np.log(Veq * (q[i] + Dttest))) - Dtau[i]) / taudot[i]
-        
-        elif indx[i] == 1:
+    # transition from 2 to 0
+    Dt[mask2] = (-Dtaup[mask2] - Dtau[mask2]) / taudot[mask2]
+    
+    # transition from 1 to 2
+    neighbour_left = np.roll(indx, 1)
+    neighbour_right = np.roll(indx, -1)
+    mask_neighbour2 = (neighbour_left == 2) | (neighbour_right == 2)
 
-            if i == 0 or i == nel - 1:
-                rate[i] = aob
-                if i == nel - 1:
-                    stopped = True
-            else:
-                if indx[i-1] == 2 or indx[i+1] == 2:
-                    rate[i] = apob
-                else:
-                    rate[i] = aob
-            
-            Dt[i] = -(rate[i] / taudot[i]) * np.log(
-                ((1.0 / Veq) + omKii / taudot[i]) / 
-                ((1.0) / V0[i] + omKii / taudot[i])
+    rate[:] = aob
+    rate[mask_neighbour2] = apob
+    rate[0] = rate[-1] = aob
+
+    Dt[mask1] = -(rate[mask1] / taudot[mask1]) * np.log(
+                ((1.0 / Veq) + omKii / taudot[mask1]) / 
+                ((1.0) / V0[i] + omKii / taudot[mask1])
             )
+    # transition from 0 to 1 
+    for i in np.where(indx==0)[0]:
+        Dttest = 0.0
+        Dt[i] = ((omaob * np.log(Veq * q[i])) - Dtau[i]) / taudot[i]
+        while abs(Dt[i] - Dttest) > 1e-5 * abs(Dt[i]):
+            Dttest = Dt[i]
+            Dt[i] = ((omaob * np.log(Veq * (q[i] + Dttest))) - Dtau[i]) / taudot[i]
+    # for i in range(nel):
 
-        else: 
-            Dt[i] = (-Dtaup[i] - Dtau[i]) / taudot[i]
+    #     if indx[i] == 0: # Dt01
+    #         Dttest = 0.0
+    #         Dt[i] = ((omaob * np.log(Veq * q[i])) - Dtau[i]) / taudot[i]
+    #         while abs(Dt[i] - Dttest) > 1e-5 * abs(Dt[i]):
+    #             Dttest = Dt[i]
+    #             Dt[i] = ((omaob * np.log(Veq * (q[i] + Dttest))) - Dtau[i]) / taudot[i]
+        
+    #     elif indx[i] == 1:
+
+    #         if i == 0 or i == nel - 1:
+    #             rate[i] = aob
+    #             if i == nel - 1:
+    #                 stopped = True
+    #         else:
+    #             if indx[i-1] == 2 or indx[i+1] == 2:
+    #                 rate[i] = apob
+    #             else:
+    #                 rate[i] = aob
+            
+    #         Dt[i] = -(rate[i] / taudot[i]) * np.log(
+    #             ((1.0 / Veq) + omKii / taudot[i]) / 
+    #             ((1.0) / V0[i] + omKii / taudot[i])
+    #         )
+
+    #     else: 
+    #         Dt[i] = (-Dtaup[i] - Dtau[i]) / taudot[i]
 
     Dtmin = np.min(Dt)
     ichange = np.argmin(Dt)
@@ -164,10 +194,12 @@ while istep < istepmax and not stopped:
                 slip[i] += Veq * Dtmin
             q[i] = 1.0 / Veq
 
-        taudot[i] += ico * Veq * Kij[abs(i - ichange)]
+        # taudot[i] += ico * Veq * Kij[abs(i - ichange)]
 
         if indx[i] == 2:
             ifront = i
+
+    taudot += ico * Veq * Kij[(indices - ichange)]
 
     # -------- record --------
 
@@ -177,7 +209,7 @@ while istep < istepmax and not stopped:
         if indx[i] == 1:
             hist1.append((i, tim))
 
-    if 'ifront' in locals():
+    if ifront >= 0:
         if ifront % 50 == 0:
             Dtau_snapshots.append(Dtau.copy())
             slip_snapshots.append(slip.copy())
