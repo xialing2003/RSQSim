@@ -28,7 +28,7 @@ DxoCs = 5e-5
 DlnV = 1.0
 
 # Load stiffness kernel 
-Kijfile = np.loadtxt("Kij_50_1")
+Kijfile = np.loadtxt("../results/Kij_50_1")
 Kij_raw = Kijfile[:, 1] 
 Kij = Kij_raw * LboDx
 Kii = Kij[0]
@@ -77,8 +77,8 @@ a2use = aob.copy()
 # Save and plot
 # =========================
 
-hist2 = np.zeros((int(istepmax*nel/5), 2))
-hist1 = np.zeros((int(istepmax*nel/5), 2))
+hist2 = np.empty((0, 2))
+hist1 = np.empty((0, 2))
 tot2 = 0
 tot1 = 0
 tim = 0.0
@@ -261,10 +261,10 @@ while istep < istepmax:
     ## record history
 
     if ifront % 50 == 0 and iplot < 500:
-        iplot += 1
         Dtau_plot[iplot] = Dtau
         slip_plot[iplot] = slip
         slip_time[iplot] = tim
+        iplot += 1
 
     aa = indx.copy()
     aa[indx == 1] = 0
@@ -276,10 +276,8 @@ while istep < istepmax:
     bb[indx == -1] = 0
     loc1 = np.where(bb)[0]
 
-    for loc in loc2:
-        hist2.append((loc, tim))
-    for loc in loc1:
-        hist1.append((loc, tim))
+    hist2 = np.vstack([hist2, np.column_stack([loc2, np.ones(len(loc2)) * tim])])
+    hist1 = np.vstack([hist1, np.column_stack([loc1, np.ones(len(loc1)) * tim])])
 
     mrate[istep-1, :] = [tim, len(loc2), ichange]
 
