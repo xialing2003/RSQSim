@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import time
 import os
 
-istepmax = 2_000_000
+istepmax = 2_000_0
 nel = 300
 Nvs = 50
 
@@ -304,19 +304,16 @@ slip_time = slip_time[:iplot]
 plt.figure()
 plt.subplot(2, 1, 1)
 for i in range(iplot):
-    plt.plot(np.range(nel), Dtau_plot[i])
+    plt.plot(np.arange(nel), Dtau_plot[i])
     plt.ylabel(r'$\Delta\tau$ (d''less)')
     plt.xlabel('Position (d''less)')
 plt.subplot(2, 1, 2)
 for i in range(iplot):
-    plt.plot(np.range(nel), slip_plot[i])
+    plt.plot(np.arange(nel), slip_plot[i])
     plt.ylabel('Slip (d''less)')
     plt.xlabel('Position (d''less)')
-
+plt.tight_layout()
 plt.savefig(folder + 'stress_slip.png')
-
-hist2 = np.array(hist2) if hist2 else np.empty((0, 2))
-hist1 = np.array(hist1) if hist1 else np.empty((0, 2))
 
 plt.figure()
 if hist2.size:
@@ -327,7 +324,7 @@ plt.xlabel("Position (d'less)")
 plt.ylabel("Time (d'less)")
 plt.savefig(folder + 'hist.png')
 
-mrate_csv = pd.DataFrame(mrate, columns=['time', 'len2', ichange])
+mrate_csv = pd.DataFrame(mrate, columns=['time', 'number of active elements', 'change index'])
 mrate_csv.to_csv(folder + 'mrate.csv', index=False)
 np.savez(folder + 'hist.npz', hist1=hist1, hist2=hist2)
 np.savez(folder + 'slip_plot.npz', slip_time = slip_time, slip_plot = slip_plot, Dtau_plot=Dtau_plot)
