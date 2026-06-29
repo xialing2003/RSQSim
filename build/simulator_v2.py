@@ -10,16 +10,20 @@
 # 2. where to start the initiation
 # ---------------- update date: 20 June
 
-# The first question has been answered:
-#   The kernel matrix should be normalized by b\sigma
+# The first two questions have been answered. 
+#   1. all the parameters are now dimensionalized, with respect to D_c, V_pl, and b*sigma.
+#   2. to start the simulation, the key is to set the initial stress distribution.
+
+# New questions:
+# 1. the slip state of nucleation elements
+# 2. how the slip of nucleation elements influence their stress profile
+# ---------------- update date: 25 June
 
 import numpy as np
 import pandas as pd
 import json
-import os
 import time
 from numba import njit
-import matplotlib.pyplot as plt
 from scipy.stats import lognorm
 import comp_kernel
 import loadrate
@@ -157,8 +161,6 @@ def update_step(indx, Dtau, taudot, velocity, q, Kjk, param_directory, slip):
 if __name__ == "__main__":
 
     folder = '../results/test_RSQSim/test_6/'
-    if not os.path.exists(folder + 'events/'):
-        os.makedirs(folder + 'events/')
     
     # prepare the kernel function and stress
     start = time.time()

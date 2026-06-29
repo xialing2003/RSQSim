@@ -1,3 +1,7 @@
+# Note that the time step doesn't have a unit of seconds, instead, its unit is Dc/Vpl.
+# Therefore, when I plot the propagation profile, I just write down 10^4 in the title directly.
+# can develop an automatic way to calculate the coefficient.
+
 import numpy as np
 import json
 import matplotlib.pyplot as plt
@@ -55,8 +59,7 @@ def cal_base(folder, coefficient):
 
     return my*nc*Vslip*Axy*coefficient
     
-
-def plot_event(ax_main, ax_moment, folder, eve_num, vmax, time_window, dis_window, normalize, ene_level, label, eps_label, arrow, arrow_0, baseline):
+def plot_event(ax_main, ax_moment, folder, eve_num, vmax, time_window, dis_window, normalize, ene_level, label, arrow, arrow_0, baseline):
     event_history = np.load(folder + f'events/history_X_{eve_num}.npy')
     mask = event_history > 0
     new_list_t, new_list_x = np.nonzero(mask)
@@ -70,13 +73,13 @@ def plot_event(ax_main, ax_moment, folder, eve_num, vmax, time_window, dis_windo
 
     potency = np.load(folder + f'events/potency_{eve_num}.npy')
     start_time = potency[0, 0]
-    pottime = (potency[:, 0] - start_time)/(24*60*60)
-    potrate = potency[:, 1]
+    pottime = (potency[0, :] - start_time)/(24*60*60)
+    potrate = potency[1, :]
 
     coefficient = G*1e6/10**ene_level
 
     cmap = cm.batlow
-    sc = ax_main.scatter(new_list_t, new_list_x, cmap=cmap, vmin=0, vmax=max(1, vmax/normalize), c=new_list_n, s=0.05, rasterized=True)
+    sc = ax_main.scatter(new_list_t, new_list_x, cmap=cmap, vmin=0, vmax=vmax/normalize, c=new_list_n, s=0.05, rasterized=True)
     ax_main.xaxis.set_visible(False)
     ax_main.set_xlim(0, pottime[-1])
     ax_main.set_ylim(-0.5, 6)
@@ -85,7 +88,7 @@ def plot_event(ax_main, ax_moment, folder, eve_num, vmax, time_window, dis_windo
     ax_main.spines['right'].set_visible(False)
     ax_main.text(-0.85, 120, label)
 
-    ax_main.set_ylabel('Strike distance (km)', fontsize=12)
+    ax_main.set_ylabel('Strike distance (km)', fontsize=11)
 
     if arrow:
         Vprop_est, Vprop_simu = cal_speed(new_list_t, new_list_x, folder, True)
@@ -103,7 +106,6 @@ def plot_event(ax_main, ax_moment, folder, eve_num, vmax, time_window, dis_windo
             arrowprops=dict(arrowstyle='-|>', color='tab:green', lw=2, linestyle='--', mutation_scale=15)
         )
         ax_main.text(start_day+1, start_x+10+Vprop_simu, f'{Vprop_est:.1f} km/d', color='tab:green', ha='left', va='center')
-        ax_main.text(0.3, 105, rf'$\epsilon_D = ${eps_label}', fontsize=12)
     
     if arrow_0:
         Vprop_est, Vprop_simu = cal_speed(new_list_t, new_list_x, folder, False)
@@ -115,7 +117,7 @@ def plot_event(ax_main, ax_moment, folder, eve_num, vmax, time_window, dis_windo
             arrowprops=dict(arrowstyle='-|>', color='tab:green', lw=2, linestyle='--', mutation_scale=15)
         )
         ax_main.text(start_day+1, start_x+10+Vprop_est, f'{Vprop_est:.1f} km/d', color='tab:green', ha='left', va='center')
-        ax_main.text(0.3, 105, rf'$\epsilon_D = 0$', fontsize=12)
+        ax_main.text(0.3, 105, rf'$\epsilon_D = 0$', fontsize=11)
                
     if baseline:
         base_ene = cal_base(folder, coefficient)
@@ -135,7 +137,7 @@ def plot_event(ax_main, ax_moment, folder, eve_num, vmax, time_window, dis_windo
     ax_moment.text(0, y_max//3*2, fr'$10^{{{ene_level}}}$', fontsize=10, ha='left', va='bottom')
     ax_moment.ticklabel_format(useOffset=False)
 
-    ax_moment.set_xlabel('Time (days)', fontsize=12)
+    ax_moment.set_xlabel(r'Time ($\times 10^4$ days)', fontsize=11)
 
     return sc
 
@@ -146,20 +148,20 @@ if __name__ == "__main__":
 
     params = json.load(open(folder + 'parameters.json'))
     G, ny, dx = params['region']['G'], params['region']['my'], params['region']['dx']
-    # time_window, dis_window = params['elastic']['time_resolution'], params['elastic']['space_resolution']
     time_window, dis_window = params['model']['time_res'], params['model']['space_res']
     normalize = time_window*dis_window/dx*ny
     print(normalize)
 
     iev = 1
-    ene = 11
+    ene = 8
     fig = plt.figure(figsize=(10, 4))
-    ax_main = fig.add_axes([0.08, 0.24, 0.85, 0.72])
+    ax_main = fig.add_axes([0.08, 0.24, 0.8, 0.72])
     ax_moment = fig.add_axes([0.08, 0.12, 0.8, 0.12])
-    sc = plot_event(ax_main, ax_moment, folder, iev, normalize, time_window, dis_window, normalize, ene, '', 0.6, arrow=False, arrow_0=False, baseline=False)
+    vmax = 20
+    sc = plot_event(ax_main, ax_moment, folder, iev, vmax, time_window, dis_window, normalize, ene, '', arrow=False, arrow_0=False, baseline=False)
     
     # plot the colormap
-    cbar_ax = fig.add_axes([0.93, 0.25, 0.02, 0.72])
+    cbar_ax = fig.add_axes([0.9, 0.25, 0.02, 0.72])
     cbar = fig.colorbar(sc, cax=cbar_ax)
     cbar.set_label(r'Faction of slip activity')
 
