@@ -19,6 +19,10 @@
 # 2. how the slip of nucleation elements influence their stress profile
 # ---------------- update date: 25 June
 
+# The questions above is about the slip of nucleation elements, like their role in the final slip profile 
+# and how they influence the stress distribution
+# A new question is to estimate the slip duration of elements #2, hope it can on the time scale of 0.25 seconds. 
+
 import numpy as np
 import pandas as pd
 import json
@@ -52,9 +56,11 @@ def prep(folder):
     
     # initialize stress
     np.random.seed(1)
-    Dtau_0, sigma_dist = param_e['Dtau_0'], param_e['sigma_dist']
+    Dtau_0, sigma_dist, Dtaupmin = param_e['Dtau_0'], param_e['sigma_dist'], param_e['Dtaupmin']
     # tau = -0.01 + 0.25 * lognorm(s=sigma_dist, scale=Dtau_0).rvs((my, nx))
-    tau = np.random.normal(loc=-2, scale = 0.005, size=(my, nx))
+    Dtau = np.random.normal(loc=Dtau_0, scale = sigma_dist, size=(my, nx))
+
+    Dtaup = np.ones((my, nx), dtype=np.float64) * Dtaupmin 
 
     # update and save the parameters
     param_e['Kii'], param_r['Axy'] = Kjk[0, 0], dx * dy
@@ -62,7 +68,7 @@ def prep(folder):
     with open(folder + 'parameters.json', 'w') as json_file:
         json.dump(parameters, json_file, indent=4)
 
-    return Kjk, taudot, tau
+    return Kjk, taudot, Dtau, Dtaup
 
 def initiate(param_directory):
     my, nx = param_directory['my'], param_directory['nx']
@@ -73,8 +79,8 @@ def initiate(param_directory):
 
     return indx, velocity, q
 
-# @njit # (parallel=True)
-def update_step(indx, Dtau, taudot, velocity, q, Kjk, param_directory, slip):
+@njit # (parallel=True)
+def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, param_directory, slip):
 
     # read in the parameters
     my, nx = param_directory['my'], param_directory['nx']
@@ -83,14 +89,12 @@ def update_step(indx, Dtau, taudot, velocity, q, Kjk, param_directory, slip):
     omKii = param_directory['omKii']
     Veq_n = param_directory['Veq_n']  
 
-    Dtaupmin = -2
-    # determine the next time step and the element that will transition
+    # determine the next time step and the next transition element
     dtnext = 1e300
     jj = 0
     kk = 0
     
-    Dt = np.zeros((my, nx), dtype=np.float64)
-    Dtaup = np.ones((my, nx), dtype=np.float64) * Dtaupmin
+    Dt = np.empty((my, nx))
     for j in range(my):
         for k in range(nx):
             if indx[j, k] == 0:
@@ -149,7 +153,7 @@ def update_step(indx, Dtau, taudot, velocity, q, Kjk, param_directory, slip):
                     velocity[j,k] = 1.0 / V0m1
             else:
                 if (j, k) == (jj, kk):
-                    Dtaup[j,k] = min(Dtaupmin, - overshoot*Dtaup[j,k])
+                    Dtaup[j,k] = min(Dtaupmin, - overshoot*Dtau[j,k])
                 else:
                     slip[j,k] += Veq_n * dtnext
                 q[j,k] = 1.0 / Veq_n
@@ -160,11 +164,11 @@ def update_step(indx, Dtau, taudot, velocity, q, Kjk, param_directory, slip):
 
 if __name__ == "__main__":
 
-    folder = '../results/test_RSQSim/test_6/'
+    folder = '../results/test_RSQSim/test_6.4/'
     
     # prepare the kernel function and stress
     start = time.time()
-    Kjk, taudot, Dtau = prep(folder)
+    Kjk, taudot, Dtau, Dtaup = prep(folder)
     end = time.time()
     print(f"time for preparation:{end-start :.4f} seconds")
 
@@ -188,7 +192,7 @@ if __name__ == "__main__":
     indx, velocity, q = initiate(param_directory)
 
     # initiation about plotting the slip profile
-    len_slip = 50000
+    len_slip = 300000
     slip = np.zeros((my, nx))
     slip_plot = np.zeros((len_slip, nx))
     stress_plot = np.zeros((len_slip, nx))
@@ -207,7 +211,7 @@ if __name__ == "__main__":
         # if slip_number == 0:
         #     continue 
 
-        dtnext, jj, kk, Dtau, taudot, indx, velocity, q, slip = update_step(indx, Dtau, taudot, velocity, q, Kjk, param_directory, slip)
+        dtnext, jj, kk, Dtau, taudot, indx, velocity, q, slip = update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, param_directory, slip)
         
         tim += dtnext
 
@@ -229,6 +233,7 @@ if __name__ == "__main__":
         if dtnext < 0:
             print('Wrong!')
 
+        # if iplotslip % 100 ==0:
         slip_plot[iplotslip] = np.mean(slip, axis=0)
         stress_plot[iplotslip] = np.mean(Dtau, axis=0)
         slip_time[iplotslip] = tim
