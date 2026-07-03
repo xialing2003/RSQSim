@@ -79,7 +79,14 @@ def initiate(param_directory):
 
     return indx, velocity, q
 
-@njit # (parallel=True)
+def judge_dt(next_timestep):
+    if next_timestep >0:
+        return next_timestep
+    else:
+        print('Wrong')
+        return 1e300
+
+# @njit # (parallel=True)
 def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, param_directory, slip):
 
     # read in the parameters
@@ -103,16 +110,16 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, param_directory, sl
                 while abs(Dt[j, k] - Dttest) > 1e-5 * abs(Dt[j, k]):
                     Dttest = Dt[j, k]
                     Dt[j, k] = ((omaob * np.log(q[j,k]+Dttest)) - Dtau[j,k]) / taudot[j,k]
-                Dt[j, k] = max(0, Dt[j, k])
+                Dt[j,k] = judge_dt(Dt[j,k])
             elif indx[j, k] == 1:              
                 Dt[j,k] = -(aob / taudot[j,k]) * np.log(
                     ((1.0 / Veq_n) + omKii / taudot[j,k]) / 
                     ((1.0) / velocity[j,k] + omKii / taudot[j,k])
                 )
-                Dt[j,k] = max(0, Dt[j,k])
+                Dt[j,k] = judge_dt(Dt[j,k])
             else: # index == 2
                 Dt[j, k] = (Dtaup[j, k] - Dtau[j, k]) / taudot[j, k]
-                Dt[j, k] = max(0, Dt[j, k])
+                Dt[j,k] = judge_dt(Dt[j,k])
             
             if Dt[j, k] < dtnext:
                 dtnext = Dt[j, k]
@@ -180,7 +187,8 @@ if __name__ == "__main__":
     omKii = 1 - abs(Kjk[0, 0])
     Veq_n = Veq / Vpl  # non-dimensionalize the velocity
 
-    param_directory = {'my': my, 'nx':nx, 'aob': aob, 'omaob': omaob, 'omKii': omKii, 'Veq_n': Veq_n, 'Dtaupmin': Dtaupmin, 'overshoot': overshoot}
+    param_directory = {'my': my, 'nx':nx, 'aob': aob, 'omaob': omaob, 'omKii': omKii, 
+                       'Veq_n': Veq_n, 'Dtaupmin': Dtaupmin, 'overshoot': overshoot}
 
     # initiation inside the simulation
     istep_record = param_m['step_record']
