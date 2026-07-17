@@ -7,7 +7,7 @@ import os
 
 if __name__ == "__main__":
 
-    folder = '../results/test_RSQSim/test_6/'
+    folder = '../results/test_RSQSim/test_v2.1/'
     if not os.path.exists(folder + 'events/'):
         os.makedirs(folder + 'events/')
 
@@ -23,6 +23,7 @@ if __name__ == "__main__":
     # outfile: time, jj(my), kk(nx), state(after trnsition), number_1
     outfile = pd.read_csv(folder + 'out_file.csv')
     times = pd.read_csv(folder + "times.csv")['time']
+    times *= Dc/Vpl
 
     ## set up the output files
 
@@ -40,7 +41,7 @@ if __name__ == "__main__":
     space_num = int(nx*dx/space_res) + 1
     unit_d2s = 24 * 60 * 60
     # time_num = int(2000*unit_d2s/time_res) + 1
-    time_num = 200000
+    time_num = 1000000
     slip_x = np.zeros(space_num, dtype=np.int64)
     prop_profile = np.zeros((time_num, space_num))
 
@@ -74,7 +75,7 @@ if __name__ == "__main__":
         
             if event_potency > potency_bar:
                 np.save(folder + f'events/history_X_{iev}.npy', prop_profile[:int(duration/time_res) + 1, :])
-                np.save(folder + f'events/potency_{iev}.npy', [times[start_step:i+1], potrate[start_step:i+1]])
+                np.save(folder + f'events/potency_{iev}.npy', [times[start_step:i+1] - times[start_step], potrate[start_step:i+1]])
                 print(f'Event {iev}: time units of', int(duration/time_res) + 1)
             
             flag_save = False
