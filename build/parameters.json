@@ -1,0 +1,35 @@
+{
+    "region": {
+        "dx": 100,
+        "dy": 100,
+        "nx": 900,
+        "my": 5,
+        "xper": 0,
+        "yper": 1,
+        "W": 15000,
+        "hh": 0,
+        "G": 40000,
+        "mu_d": 4000,
+        "sourcenum": 10,
+        "Axy": 10000
+    },
+    "elastic": {
+        "V_pl": 1e-09,
+        "V_eq": 1e-06,
+        "a": 0.008,
+        "b": 0.01,
+        "D_c": 2e-05,
+        "sigma": 1,
+        "Dtau_0": -1,
+        "sigma_dist": 1e-05,
+        "overshoot": 0.2,
+        "Dtaupmin": -0.5,
+        "Kii": -0.7445833265509565
+    },
+    "model": {
+        "step_record": 1000000,
+        "time_res": 60,
+        "space_res": 100,
+        "size_rec": 1000
+    }
+}
