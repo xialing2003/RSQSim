@@ -152,7 +152,7 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
 
 if __name__ == "__main__":
 
-    folder = '../results/RSQSim2/v0/'
+    folder = '../results/RSQSim_stage1/test1/'
     
     # prepare the kernel function and stress
     start = time.time()

@@ -10,7 +10,7 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 
 if __name__ == "__main__":
 
-    folder = "/home/lx4572/Desktop/research/RSQSim/results/test_RSQSim/test_6/"
+    folder = "../results/RSQSim_stage1/test1/"
     params = json.load(open(folder + 'parameters.json'))
     param_r, param_e, param_m = params['region'], params['elastic'], params['model']
     my, nx, dx, dy = param_r['my'], param_r['nx'], param_r['dx'], param_r['dy']
@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     # plot slip plots
     plt.figure()
-    for i in range(0, iplot, 1000):
+    for i in range(0, iplot, 10):
         plt.plot(np.arange(nx)*dx/1000, slip_plot[i, :]*Dc*100)
     plt.xlabel('X (km)')
     plt.ylabel('slip distance (cm)')
@@ -39,7 +39,7 @@ if __name__ == "__main__":
 
     # plot stress plots
     plt.figure()
-    for i in range(0, iplot, 1000):
+    for i in range(0, iplot, 10):
         plt.plot(np.arange(nx)*dx/1000, stress_plot[i, :])
     plt.xlabel('X (km)')
     plt.ylabel('Stress')
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     print('slip and nucleation plot saved')
 
     # plot the animation of events
-    plot_animation = True
+    plot_animation = False
     if plot_animation:
         # Define your colormap and normalization
         cmap = ListedColormap(["white", "#ecb78d", "red"])

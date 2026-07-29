@@ -2,6 +2,9 @@
 # Therefore, when I plot the propagation profile, I just write down 10^4 in the title directly.
 # can develop an automatic way to calculate the coefficient.
 
+# besides, to plot the propagation patterns of the original simulations, 
+# the potrate should switch lines and rows, and the time/space windows also need to be specified
+
 import numpy as np
 import json
 import matplotlib.pyplot as plt
@@ -119,8 +122,8 @@ def plot_event(ax_main, event_history, time_window, dis_window, normalize, arrow
 
 def plot_moment(ax_moment, potency, G, cutoff, start_day, end_day):
 
-    pottime = potency[:, 0]/(24*60*60)
-    potrate = potency[:, 1]
+    pottime = potency[0, :]/(24*60*60)
+    potrate = potency[1, :]
     pottime -= pottime[0]
 
     if cutoff:
@@ -179,8 +182,9 @@ def plot_alg(iev, folder, begin_days, G, time_window, dis_window, normalize):
 if __name__ == "__main__":
 
     # folder = '../results/test_RSQSim/test_v2.2/'
-    folder = '../results/for_comp_qsdm/nx900_my5_eps0.9/'
-    folder_event = 'events'
+    # folder = '../results/for_comp_qsdm/nx900_my5_eps0.9/'
+    folder = '../results/RSQSim_stage1/test1/'
+    folder_event = 'events_v3'
     events = pd.read_csv(folder + folder_event + '.csv')
 
     event_ids = sorted(
@@ -190,15 +194,15 @@ if __name__ == "__main__":
 
     params = json.load(open(folder + 'parameters.json'))
     G, ny, dx = params['region']['G'], params['region']['my'], params['region']['dx']
-    time_window, dis_window = 60, 500#params['model']['time_res'], params['model']['space_res']
+    time_window, dis_window = params['model']['time_res'], params['model']['space_res']
     normalize = time_window*dis_window/dx*ny
     print(normalize)
 
-    # for iev in event_ids:
-    #     begin_days = int(events.iloc[iev]['start_time'] / (24 * 3600))
-    #     plot_alg(iev, folder + folder_event, begin_days, G, time_window, dis_window, normalize)
+    for iev in event_ids:
+        begin_days = int(events.iloc[iev]['start_time'] / (24 * 3600))
+        plot_alg(iev, folder + folder_event, begin_days, G, time_window, dis_window, normalize)
 
-    iev = 50
+    # iev = 33516
     # begin_days = int(events.iloc[iev]['start_time'] / (24 * 3600))
-    begin_days = 0
-    plot_alg(iev, folder + folder_event, begin_days, G, time_window, dis_window, normalize)
+    # # begin_days = 0
+    # plot_alg(iev, folder + folder_event, begin_days, G, time_window, dis_window, normalize)
