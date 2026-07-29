@@ -59,7 +59,7 @@ def judge_dt(next_timestep):
 
 @njit(parallel=True)
 def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
-                my, nx, overshoot, Dtaupmin, aob, Veq_n, Dtau_ref):
+                my, nx, overshoot, Dtaupmin, aob, Veq_n):
 
     omaob = 1 - aob
     omKii = 1 - abs(Kjk[0, 0]) 
@@ -79,10 +79,10 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
         for k in range(nx):
             if indx[j, k] == 0:
                 Dttest = 0.0
-                local_dt = ((omaob * np.log(q[j,k])) - Dtau[j,k] - Dtau_ref) / taudot[j,k]
+                local_dt = (omaob * (np.log(Veq_n) + np.log(q[j,k])) - Dtau[j,k]) / taudot[j,k]
                 while abs(local_dt - Dttest) > 1e-5 * abs(local_dt):
                     Dttest = local_dt
-                    local_dt = ((omaob * np.log(q[j,k]+Dttest)) - Dtau[j,k] - Dtau_ref) / taudot[j,k]
+                    local_dt = (omaob * (np.log(Veq_n) + np.log(q[j,k]+Dttest)) - Dtau[j,k]) / taudot[j,k]
                 # Dt[j,k] = judge_dt(Dt[j,k])
             elif indx[j, k] == 1:              
                 local_dt = -(aob / taudot[j,k]) * np.log(
@@ -152,7 +152,7 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
 
 if __name__ == "__main__":
 
-    folder = '../results/RSQSim2/v0_test/'
+    folder = '../results/RSQSim2/v0/'
     
     # prepare the kernel function and stress
     start = time.time()
@@ -165,7 +165,6 @@ if __name__ == "__main__":
     Veq, Vpl, my, nx = param_e['V_eq'], param_e['V_pl'], param_r['my'], param_r['nx']
     a, b, overshoot, Dtaupmin = param_e['a'], param_e['b'], param_e['overshoot'], param_e['Dtaupmin']
     aob, Veq_n = a/b, Veq / Vpl  # non-dimensionalize the velocity
-    Dtau_ref = (aob-1)*np.log(Veq_n)
 
     # initialize stress
     np.random.seed(1)
@@ -207,7 +206,7 @@ if __name__ == "__main__":
         #     continue 
 
         dtnext, jj, kk, Dtau, taudot, indx, velocity, q, slip, taudot_jk = update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
-                                                                            my, nx, overshoot, Dtaupmin, aob, Veq_n, Dtau_ref)
+                                                                            my, nx, overshoot, Dtaupmin, aob, Veq_n)
         
         tim += dtnext
 
