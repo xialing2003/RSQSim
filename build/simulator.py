@@ -111,7 +111,6 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
         for k in range(nx):
 
             Dtau[j,k] += dtnext * taudot[j,k]
-            taudot[j,k] += ico * Veq_n * Kjk[abs(jj-j), abs(kk-k)]
 
             if (j,k) == (jj, kk):
                 continue
@@ -129,13 +128,15 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
                 slip[j,k] += Veq_n * dtnext
                 q[j,k] = 1.0 / Veq_n      
 
+            taudot[j,k] += ico * Veq_n * Kjk[abs(jj-j), abs(kk-k)]
+
     if indx[jj,kk] == 0:
         q[jj,kk] = 1 / Veq_n
         slip[jj,kk] += Veq_n * dtnext
     elif indx[jj,kk] == 1:
         velocity[jj, kk] = 1.0 / (q[jj, kk] + dtnext)
     else:
-        Dtau[jj, kk] = min(Dtaupmin, -overshoot*Dtau[jj,kk])
+        Dtaup[jj, kk] = min(Dtaupmin, -overshoot*Dtau[jj,kk])
         slip[jj, kk] -= Veq_n * dtnext
         q[jj, kk] = 1.0 / Veq_n
     # for j in range(my):
