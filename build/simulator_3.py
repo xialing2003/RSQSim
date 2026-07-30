@@ -10,7 +10,7 @@ from scipy.stats import lognorm
 import comp_kernel
 import loadrate
 
-# set_num_threads(5)
+set_num_threads(5)
 # print("Numba threads:", get_num_threads())
 
 def prep(folder):
@@ -108,7 +108,7 @@ def update_step(state_j, state_k, state_n, dt_m, flag_use, Dtau, Dtaup, taudot, 
             ii = i
 
     jj, kk = state_j[idx_to_change, ii], state_k[idx_to_change, ii]
-    taudot_jk = taudot[jj,kk]
+    # taudot_jk = taudot[jj,kk]
     
     # update all the elements based on the state switch of the element (jj, kk)
     Dtau += dtnext * taudot
@@ -132,17 +132,14 @@ def update_step(state_j, state_k, state_n, dt_m, flag_use, Dtau, Dtaup, taudot, 
     else:
         q[jj,kk] = 1.0 / Veq_n 
 
-    if idx_to_change == 0:
-        ico = 0
-    elif idx_to_change ==1:
-        ico = 1
-    else:
-        ico = -1
-    for j in range(my):
-        for k in range(nx):
-            taudot[j,k] += ico * Veq_n * Kjk[abs(jj-j), abs(kk-k)]
+    return dtnext, ii, idx_to_change, Dtau, velocity, q, slip, dt_m
 
-    return dtnext, ii, idx_to_change, Dtau, taudot, velocity, q, slip, taudot_jk, dt_m
+@njit(parallel=True)
+def update_stress_rate(taudot, coeKjk):
+    for k in prange(nx):
+        for j in range(my):
+            taudot[j,k] += coeKjk[abs(jj-j), abs(kk-k)]
+    return taudot
 
 if __name__ == "__main__":
 
@@ -180,6 +177,7 @@ if __name__ == "__main__":
     state_n = np.array([my*nx, 0, 0], dtype=np.int64)
     dt_m = np.zeros(my * nx, dtype=np.float64)
     flag_use = False
+    ico_label = [0, 1, -1]
 
     # initiation about plotting the slip profile
     size_rec = param_m['size_rec']
@@ -200,12 +198,15 @@ if __name__ == "__main__":
     start = time.time()
     while istep < istep_record:
 
-        dtnext, ii, idx_to_change, Dtau, taudot, velocity, q, slip, taudot_jk, dt_m = update_step(state_j, state_k, state_n, dt_m, flag_use,
-                                                                            Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
-                                                                            my, nx, overshoot, Dtaupmin, aob, Veq_n)
+        dtnext, ii, idx_to_change, Dtau, velocity, q, slip, dt_m = update_step(state_j, state_k, state_n, dt_m, flag_use,
+                                                                    Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
+                                                                    my, nx, overshoot, Dtaupmin, aob, Veq_n)
 
         jj = state_j[idx_to_change, ii]
         kk = state_k[idx_to_change, ii]
+        taudot_jk = taudot[jj, kk]
+        ico = ico_label[idx_to_change]
+        taudot = update_stress_rate(taudot, ico*Veq*Kjk)
         
         tim += dtnext
 
