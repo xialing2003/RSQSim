@@ -83,7 +83,6 @@ def update_step(state_j, state_k, state_n, Dtau, Dtaup, taudot, velocity, q, Kjk
             dtnext = local_dt
             idx_to_change = 0
             ii = i
-            jj, kk = j, k
 
     for i in range(state_n[1]):
         j, k = state_j[1, i], state_k[1, i]
@@ -95,7 +94,6 @@ def update_step(state_j, state_k, state_n, Dtau, Dtaup, taudot, velocity, q, Kjk
             dtnext = local_dt
             idx_to_change = 1
             ii = i
-            jj, kk = j, k
 
     for i in range(state_n[2]):
         j, k = state_j[2, i], state_k[2, i]
@@ -104,20 +102,16 @@ def update_step(state_j, state_k, state_n, Dtau, Dtaup, taudot, velocity, q, Kjk
             dtnext = local_dt
             idx_to_change = 2
             ii = i
-            jj, kk = j, k
 
-    # state switch
-    
-
+    jj, kk = state_j[idx_to_change, ii], state_k[idx_to_change, ii]
     taudot_jk = taudot[jj,kk]
     
     # update all the elements based on the state switch of the element (jj, kk)
     Dtau += dtnext * taudot
     q[state_j[0, state_n[0]], state_k[0, state_n[0]]] += dtnext
-    slip[state_j[0, state_n[0]], state_k[0, state_n[0]]] += Veq_n * dtnext
-    flag = (idx_to_change == 0)
+    slip[state_j[2, state_n[2]], state_k[2, state_n[2]]] += Veq_n * dtnext
     for i in range(state_n[1]):
-        if flag and i == ii:
+        if idx_to_change == 1 and i == ii:
             continue
         j, k = state_j[1, i], state_k[1, i]
         V0m1 = (
@@ -127,15 +121,19 @@ def update_step(state_j, state_k, state_n, Dtau, Dtaup, taudot, velocity, q, Kjk
         )
         velocity[j,k] = 1.0 / V0m1
 
-    if idx_to_change == 2:
-        q[jj,kk] = 1 / Veq_n
-    elif idx_to_change == 0:
-        velocity[jj, kk] = 1.0 / (q[jj, kk] + dtnext)
-    else:
+    if idx_to_change == 0:
+        velocity[jj, kk] = 1.0 / q[jj, kk]
+    elif idx_to_change == 1:
         Dtaup[jj, kk] = min(Dtaupmin, -overshoot*Dtau[jj,kk])
-        q[jj, kk] = 1.0 / Veq_n
+    else:
+        q[jj,kk] = 1.0 / Veq_n 
 
-    ico = np.array([0, 1, -1])[idx_to_change]
+    if idx_to_change == 0:
+        ico = 0
+    elif idx_to_change ==1:
+        ico = 1
+    else:
+        ico = -1
     for j in range(my):
         for k in range(nx):
             taudot[j,k] += ico * Veq_n * Kjk[abs(jj-j), abs(kk-k)]
@@ -168,8 +166,6 @@ if __name__ == "__main__":
     # initiation inside the simulation
     istep_record = param_m['step_record']
     tim = 0.0
-    nucleation_number = 0
-    slip_number = 0
     istep = 0
 
     indx, velocity, q = initiate(my, nx, Veq_n)
