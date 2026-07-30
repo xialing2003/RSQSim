@@ -117,7 +117,7 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
 
             if indx[j, k] == 0:
                 q[j,k] += dtnext
-            elif indx[j, k] == 1 and (j, k) != (jj, kk):
+            elif indx[j, k] == 1:
                 V0m1 = (
                     (1.0 / velocity[j,k] + omKii / taudot[j,k])
                     * np.exp(-taudot[j,k] * dtnext / aob)
@@ -139,35 +139,7 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
         Dtaup[jj, kk] = min(Dtaupmin, -overshoot*Dtau[jj,kk])
         slip[jj, kk] -= Veq_n * dtnext
         q[jj, kk] = 1.0 / Veq_n
-    # for j in range(my):
-    #         for k in range(nx):
-    
-    #             Dtau[j,k] += dtnext * taudot[j,k]
-    
-    #             if indx[j, k] == 0:
-    #                 if (j, k) == (jj, kk):
-    #                     q[j,k] = 1 / Veq_n
-    #                     slip[j,k] += Veq_n * dtnext
-    #                 else:
-    #                     q[j,k] += dtnext
-    #             elif indx[j, k] == 1:
-    #                 if (j, k) == (jj, kk):
-    #                     velocity[j,k] = 1.0 / (q[j,k] + dtnext)
-    #                 else:
-    #                     V0m1 = (
-    #                         (1.0 / velocity[j,k] + omKii / taudot[j,k])
-    #                         * np.exp(-taudot[j,k] * dtnext / aob)
-    #                         - omKii / taudot[j,k]
-    #                     )
-    #                     velocity[j,k] = 1.0 / V0m1
-    #             else:
-    #                 if (j, k) == (jj, kk):
-    #                     Dtaup[j,k] = min(Dtaupmin, -overshoot*Dtau[j,k])
-    #                 else:
-    #                     slip[j,k] += Veq_n * dtnext
-    #                 q[j,k] = 1.0 / Veq_n
-            
-    #             taudot[j,k] += ico * Veq_n * Kjk[abs(jj-j), abs(kk-k)]
+    taudot[jj, kk] += ico * Veq_n * Kjk[0, 0]
 
     return dtnext, jj, kk, Dtau, taudot, indx, velocity, q, slip, taudot_jk
 
