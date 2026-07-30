@@ -146,7 +146,7 @@ def update_step(state_j, state_k, state_n, dt_m, flag_use, Dtau, Dtaup, taudot, 
 
 if __name__ == "__main__":
 
-    folder = '../results/RSQSim_stage1/test1/'
+    folder = '../results/RSQSim_stage1/test10/'
     
     # prepare the kernel function and stress
     start = time.time()
@@ -218,6 +218,13 @@ if __name__ == "__main__":
         stress_np[istep] = Dtau[jj, kk]
         dtauodt_np[istep] = taudot_jk
 
+        if idx_to_change == 0:
+            flag_use = True
+            dt_m[ii] = dt_m[state_n[0] - 1]
+            dt_m[:state_n[0]] -= dtnext
+        else:
+            flag_use = False
+
         state_j[idx_to_change, ii] = state_j[idx_to_change, state_n[idx_to_change]-1]
         state_k[idx_to_change, ii] = state_k[idx_to_change, state_n[idx_to_change]-1]
         state_n[idx_to_change] -= 1
@@ -225,13 +232,6 @@ if __name__ == "__main__":
         state_j[idx_to_change, state_n[idx_to_change]] = jj
         state_k[idx_to_change, state_n[idx_to_change]] = kk
         state_n[idx_to_change] += 1
-
-        if idx_to_change == 1:
-            flag_use = True
-            dt_m[ii] = dt_m[state_n[0] - 1]
-            dt_m -= dtnext
-        else:
-            flag_use = False
         
         if dtnext < 0:
             print('Wrong!')
