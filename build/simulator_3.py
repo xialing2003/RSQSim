@@ -1,4 +1,5 @@
 # plan to separate the elements into three categories and do calculations individually
+# actually it turns out taking much longer time
 import numpy as np
 import pandas as pd
 import json
@@ -58,11 +59,10 @@ def judge_dt(next_timestep):
         return 1e300
 
 @njit
-def update_step(state_j, state_k, state_n, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
-                my, nx, overshoot, Dtaupmin, aob, Veq_n):
+def update_step(state_j, state_k, state_n, Dtau, Dtaup, taudot, velocity, q, K_sym, slip,
+                my, nx, overshoot, Dtaupmin, aob, Veq_n, omKii):
 
     omaob = 1 - aob
-    omKii = 1 - abs(Kjk[0, 0]) 
 
     # determine the next time step and the next transition element
     dtnext = 1e300
@@ -108,8 +108,8 @@ def update_step(state_j, state_k, state_n, Dtau, Dtaup, taudot, velocity, q, Kjk
     
     # update all the elements based on the state switch of the element (jj, kk)
     Dtau += dtnext * taudot
-    q[state_j[0, state_n[0]], state_k[0, state_n[0]]] += dtnext
-    slip[state_j[2, state_n[2]], state_k[2, state_n[2]]] += Veq_n * dtnext
+    q[state_j[0, :state_n[0]], state_k[0, :state_n[0]]] += dtnext
+    slip[state_j[2, :state_n[2]], state_k[2, :state_n[2]]] += Veq_n * dtnext
     for i in range(state_n[1]):
         if idx_to_change == 1 and i == ii:
             continue
@@ -134,9 +134,10 @@ def update_step(state_j, state_k, state_n, Dtau, Dtaup, taudot, velocity, q, Kjk
         ico = 1
     else:
         ico = -1
-    for j in range(my):
-        for k in range(nx):
-            taudot[j,k] += ico * Veq_n * Kjk[abs(jj-j), abs(kk-k)]
+    # for j in range(my):
+    #     for k in range(nx):
+    #         taudot[j,k] += ico * Veq_n * Kjk[abs(jj-j), abs(kk-k)]
+    taudot += ico * Veq_n * K_sym[my-jj-1 : 2*my-jj-1, nx-kk-1:2*nx-kk-1]
 
     return dtnext, ii, idx_to_change, Dtau, taudot, velocity, q, slip, taudot_jk
 
@@ -155,6 +156,9 @@ if __name__ == "__main__":
     Veq, Vpl, my, nx = param_e['V_eq'], param_e['V_pl'], param_r['my'], param_r['nx']
     a, b, overshoot, Dtaupmin = param_e['a'], param_e['b'], param_e['overshoot'], param_e['Dtaupmin']
     aob, Veq_n = a/b, Veq / Vpl  # non-dimensionalize the velocity
+    omKii = 1 - abs(Kjk[0, 0]) 
+    K_vert = np.concatenate((Kjk[::-1, :], Kjk[1:, :]), axis=0)
+    K_sym = np.concatenate((K_vert[:, ::-1], K_vert[:, 1:]), axis=1)
 
     # initialize stress
     np.random.seed(1)
@@ -196,8 +200,8 @@ if __name__ == "__main__":
     while istep < istep_record:
 
         dtnext, ii, idx_to_change, Dtau, taudot, velocity, q, slip, taudot_jk = update_step(state_j, state_k, state_n, 
-                                                                            Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
-                                                                            my, nx, overshoot, Dtaupmin, aob, Veq_n)
+                                                                            Dtau, Dtaup, taudot, velocity, q, K_sym, slip,
+                                                                            my, nx, overshoot, Dtaupmin, aob, Veq_n, omKii)
 
         jj = state_j[idx_to_change, ii]
         kk = state_k[idx_to_change, ii]
