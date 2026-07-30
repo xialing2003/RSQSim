@@ -133,13 +133,14 @@ def update_step(state_j, state_k, state_n, dt_m, flag_use, Dtau, Dtaup, taudot, 
 
     return dtnext, ii, idx_to_change, Dtau, velocity, q, slip, dt_m
 
-@njit(parallel=True)
-def update_stress_rate(taudot, coe, Kjk, my, nx, jj, kk):
-    for j in prange(my):
-        dj = abs(j - jj)
+@njit#(parallel=True)
+def update_stress_rate(taudot, coe, K_sym, jj, kk):
+    my, nx = taudot.shape
+    jstart = my - jj - 1
+    kstart = nx - kk - 1
+    for j in range(my):
         for k in range(nx):
-            dk = abs(kk - k)
-            taudot[j,k] += coe * Kjk[dj, dk]
+            taudot[j,k] += coe * K_sym[jstart+j, kstart+k]
     return taudot
 
 if __name__ == "__main__":
@@ -157,6 +158,8 @@ if __name__ == "__main__":
     Veq, Vpl, my, nx = param_e['V_eq'], param_e['V_pl'], param_r['my'], param_r['nx']
     a, b, overshoot, Dtaupmin = param_e['a'], param_e['b'], param_e['overshoot'], param_e['Dtaupmin']
     aob, Veq_n = a/b, Veq / Vpl  # non-dimensionalize the velocity
+    K_vert = np.concatenate((Kjk[::-1, :], Kjk[1:, :]), axis=0)
+    K_sym = np.concatenate((K_vert[:, ::-1], K_vert[:, 1:]), axis=1)
 
     # initialize stress
     np.random.seed(1)
@@ -208,7 +211,8 @@ if __name__ == "__main__":
         taudot_jk = taudot[jj, kk]
         ico = ico_label[idx_to_change]
         if ico != 0:
-            taudot = update_stress_rate(taudot, ico * Veq_n, Kjk, my, nx, jj, kk)
+            taudot = update_stress_rate(taudot, ico * Veq_n, K_sym, jj, kk)
+            # taudot += ico * Veq_n * K_sym[my-jj-1:2*my-jj-1, nx-kk-1:2*nx-kk-1]
         
         tim += dtnext
 
