@@ -108,7 +108,6 @@ def update_step(state_j, state_k, state_n, dt_m, flag_use, Dtau, Dtaup, taudot, 
             ii = i
 
     jj, kk = state_j[idx_to_change, ii], state_k[idx_to_change, ii]
-    # taudot_jk = taudot[jj,kk]
     
     # update all the elements based on the state switch of the element (jj, kk)
     Dtau += dtnext * taudot
@@ -135,10 +134,12 @@ def update_step(state_j, state_k, state_n, dt_m, flag_use, Dtau, Dtaup, taudot, 
     return dtnext, ii, idx_to_change, Dtau, velocity, q, slip, dt_m
 
 @njit(parallel=True)
-def update_stress_rate(taudot, coeKjk):
-    for k in prange(nx):
-        for j in range(my):
-            taudot[j,k] += coeKjk[abs(jj-j), abs(kk-k)]
+def update_stress_rate(taudot, coe, Kjk, my, nx, jj, kk):
+    for j in prange(my):
+        dj = abs(j - jj)
+        for k in range(nx):
+            dk = abs(kk - k)
+            taudot[j,k] += coe * Kjk[dj, dk]
     return taudot
 
 if __name__ == "__main__":
@@ -206,7 +207,8 @@ if __name__ == "__main__":
         kk = state_k[idx_to_change, ii]
         taudot_jk = taudot[jj, kk]
         ico = ico_label[idx_to_change]
-        taudot = update_stress_rate(taudot, ico*Veq*Kjk)
+        if ico != 0:
+            taudot = update_stress_rate(taudot, ico * Veq_n, Kjk, my, nx, jj, kk)
         
         tim += dtnext
 
