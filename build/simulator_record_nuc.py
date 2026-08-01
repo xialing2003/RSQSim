@@ -1,5 +1,4 @@
-# almost the same as simulator_v2_parallel.py, the big difference is about how to set the stress stress to enter state 0
-
+# the same as simulatoe.py, but add the recording of velocity sum of nucleation elements
 import numpy as np
 import pandas as pd
 import json
@@ -10,8 +9,8 @@ from scipy.stats import lognorm
 import comp_kernel
 import loadrate
 
-set_num_threads(5)
-print("Numba threads:", get_num_threads())
+# set_num_threads(5)
+# print("Numba threads:", get_num_threads())
 
 def prep(folder):
     # read the parameter files
@@ -57,7 +56,7 @@ def judge_dt(next_timestep):
         print('Wrong')
         return 1e300
 
-@njit(parallel=True)
+@njit#(parallel=True)
 def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
                 my, nx, overshoot, Dtaupmin, aob, Veq_n):
 
@@ -68,13 +67,8 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
     dtnext = 1e300
     jj = 0
     kk = 0
-    
-    min_vals = np.zeros(my)
-    idxs = np.zeros(my, dtype=np.int64)
 
-    for j in prange(my):
-
-        min_vals[j] = 1e300
+    for j in range(my):
 
         for k in range(nx):
             if indx[j, k] == 0:
@@ -94,15 +88,9 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
                 local_dt = (Dtaup[j, k] - Dtau[j, k]) / taudot[j, k]
                 # Dt[j,k] = judge_dt(Dt[j,k])
             
-            if local_dt < min_vals[j]:
-                min_vals[j] = local_dt
-                idxs[j] = j*nx + k
-        
-    for j in range(my):
-            
-        if min_vals[j] < dtnext:
-            dtnext = min_vals[j]
-            jj, kk = idxs[j]//nx, idxs[j]%nx
+            if local_dt < dtnext:
+                dtnext = local_dt
+                jj, kk = j, k
 
     # state switch
     if indx[jj, kk] == 0:
@@ -118,7 +106,7 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
     taudot_jk = taudot[jj,kk]
     
     # update all the elements based on the state switch of the element (jj, kk)
-    for j in prange(my):
+    for j in range(my):
         for k in range(nx):
 
             Dtau[j,k] += dtnext * taudot[j,k]
@@ -152,7 +140,7 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
 
 if __name__ == "__main__":
 
-    folder = '../results/RSQSim_stage1/test1/'
+    folder = '../results/RSQSim_stage1/test10/'
     
     # prepare the kernel function and stress
     start = time.time()
@@ -197,6 +185,7 @@ if __name__ == "__main__":
     outfile_np = np.zeros((istep_record, 5), dtype=np.int32)
     stress_np = np.zeros(istep_record, dtype=np.float64)
     dtauodt_np = np.zeros(istep_record, dtype=np.float64)
+    nuc_MR_np = np.zeros(istep_record, dtype=np.float64)
 
     start = time.time()
     while istep < istep_record:
@@ -226,6 +215,9 @@ if __name__ == "__main__":
             nucleation_number += 1
         else:
             slip_number -= 1
+
+        mask_nuc = indx == 1
+        nuc_MR_np[istep] = velocity[mask_nuc].sum()
         
         if dtnext < 0:
             print('Wrong!')
@@ -252,9 +244,10 @@ if __name__ == "__main__":
     stress_record.to_csv(folder + 'stress_record.csv', index=False)
     dtauodt = pd.DataFrame(dtauodt_np, columns=['dtauodt'])
     dtauodt.to_csv(folder + 'dtauodt.csv', index=False)
+    nuc_MR = pd.DataFrame(nuc_MR_np, columns=['nuc_MR'])
+    nuc_MR.to_csv(folder + 'nuc_MR.csv', index=False)
 
     slip_plot = slip_plot[:iplotslip]
     stress_plot = stress_plot[:iplotslip]
     slip_time = slip_time[:iplotslip]
     np.savez(folder + 'slip_plot.npz', slip_time = slip_time, slip_plot = slip_plot, stress_plot=stress_plot)
-
