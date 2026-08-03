@@ -1,4 +1,4 @@
-# the same as simulator.py, but add the recording of velocity sum of nucleation elements
+# based on simulator_record_nuc.py, the difference is that all the elements are updated based on the nucleation velocity as well.
 import numpy as np
 import pandas as pd
 import json
