@@ -1,15 +1,16 @@
-# based on simulator_record_nuc.py, the difference is that all the elements are updated based on the nucleation velocity as well.
+# plan to separate the elements into three categories and do calculations individually
 import numpy as np
 import pandas as pd
 import json
 import time
 from numba import njit, prange
 from numba import set_num_threads, get_num_threads
+from numba.experimental import jitclass
 from scipy.stats import lognorm
 import comp_kernel
 import loadrate
 
-# set_num_threads(5)
+set_num_threads(5)
 # print("Numba threads:", get_num_threads())
 
 def prep(folder):
@@ -56,8 +57,13 @@ def judge_dt(next_timestep):
         print('Wrong')
         return 1e300
 
-@njit#(parallel=True)
-def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
+def mirror(a):
+    v = np.concatenate((a[::-1, :], a[1:, :]), axis=0)
+    return np.concatenate((v[:, ::-1], v[:, 1:]), axis=1)
+
+
+@njit
+def update_step(state_j, state_k, state_n, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
                 my, nx, overshoot, Dtaupmin, aob, Veq_n):
 
     omaob = 1 - aob
@@ -65,94 +71,119 @@ def update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
 
     # determine the next time step and the next transition element
     dtnext = 1e300
+    ii = 0
+    idx_to_change = 0
     jj = 0
     kk = 0
 
-    for j in range(my):
+    for i in range(state_n[0]):
+        j, k = state_j[0, i], state_k[0, i]
+        Dttest = 0.0
+        local_dt = (omaob * (np.log(Veq_n) + np.log(q[j,k])) - Dtau[j,k]) / taudot[j,k]
+        while abs(local_dt - Dttest) > 1e-5 * abs(local_dt):
+            Dttest = local_dt
+            local_dt = (omaob * (np.log(Veq_n) + np.log(q[j,k]+Dttest)) - Dtau[j,k]) / taudot[j,k]
+        if local_dt < dtnext:
+            dtnext = local_dt
+            idx_to_change = 0
+            ii = i
 
-        for k in range(nx):
-            if indx[j, k] == 0:
-                Dttest = 0.0
-                local_dt = (omaob * (np.log(Veq_n) + np.log(q[j,k])) - Dtau[j,k]) / taudot[j,k]
-                while abs(local_dt - Dttest) > 1e-5 * abs(local_dt):
-                    Dttest = local_dt
-                    local_dt = (omaob * (np.log(Veq_n) + np.log(q[j,k]+Dttest)) - Dtau[j,k]) / taudot[j,k]
-                # Dt[j,k] = judge_dt(Dt[j,k])
-            elif indx[j, k] == 1:              
-                local_dt = -(aob / taudot[j,k]) * np.log(
-                    ((1.0 / Veq_n) + omKii / taudot[j,k]) / 
-                    ((1.0) / velocity[j,k] + omKii / taudot[j,k])
-                )
-                # Dt[j,k] = judge_dt(Dt[j,k])
-            else: # index == 2
-                local_dt = (Dtaup[j, k] - Dtau[j, k]) / taudot[j, k]
-                # Dt[j,k] = judge_dt(Dt[j,k])
-            
-            if local_dt < dtnext:
-                dtnext = local_dt
-                jj, kk = j, k
+    for i in range(state_n[1]):
+        j, k = state_j[1, i], state_k[1, i]
+        local_dt = -(aob / taudot[j,k]) * np.log(
+            ((1.0 / Veq_n) + omKii / taudot[j,k]) / 
+            ((1.0) / velocity[j,k] + omKii / taudot[j,k])
+        )
+        if local_dt < dtnext:
+            dtnext = local_dt
+            idx_to_change = 1
+            ii = i
 
-    # state switch
-    if indx[jj, kk] == 0:
-        indx[jj, kk] = 1
-        ico = 0
-    elif indx[jj, kk] == 1:
-        indx[jj, kk] = 2
-        ico = 1
-    else:
-        indx[jj, kk] = 0
-        ico = -1
+    for i in range(state_n[2]):
+        j, k = state_j[2, i], state_k[2, i]
+        local_dt = (Dtaup[j, k] - Dtau[j, k]) / taudot[j, k]
+        if local_dt < dtnext:
+            dtnext = local_dt
+            idx_to_change = 2
+            ii = i
 
-    taudot_jk = taudot[jj,kk]
+    jj, kk = state_j[idx_to_change, ii], state_k[idx_to_change, ii]
     
     # update all the elements based on the state switch of the element (jj, kk)
+    Dtau += dtnext * taudot
+    q[state_j[0, :state_n[0]], state_k[0, :state_n[0]]] += dtnext
+    slip[state_j[2, :state_n[2]], state_k[2, :state_n[2]]] += Veq_n * dtnext
+    for i in range(state_n[1]):
+        if idx_to_change == 1 and i == ii:
+            continue
+        j, k = state_j[1, i], state_k[1, i]
+        V0m1 = (
+            (1.0 / velocity[j,k] + omKii / taudot[j,k])
+            * np.exp(-taudot[j,k] * dtnext / aob)
+            - omKii / taudot[j,k]
+        )
+        velocity[j,k] = 1.0 / V0m1
+
+    if idx_to_change == 0:
+        velocity[jj, kk] = 1.0 / q[jj, kk]
+    elif idx_to_change == 1:
+        Dtaup[jj, kk] = min(Dtaupmin, -overshoot*Dtau[jj,kk])
+    else:
+        q[jj,kk] = 1.0 / Veq_n 
+
+    return dtnext, ii, idx_to_change, Dtau, velocity, q, slip
+
+@njit
+def update_stress_rate2(taudot, coe, jj, kk, K_sym):
+    my, nx = taudot.shape
+    jstart = my - jj - 1
+    kstart = nx - kk - 1
     for j in range(my):
         for k in range(nx):
+            taudot[j,k] += coe * K_sym[jstart+j, kstart+k]
+    return taudot
 
-            Dtau[j,k] += dtnext * taudot[j,k]
+@njit
+def update_stress_rate1(K_sym, Kii, velocity, state_j, state_k, number_1, V_c):
 
-            if indx[j, k] == 0:
-                if (j, k) == (jj, kk):
-                    q[j,k] = 1 / Veq_n
-                    slip[j,k] += Veq_n * dtnext
-                else:
-                    q[j,k] += dtnext
-            elif indx[j, k] == 1:
-                if (j, k) == (jj, kk):
-                    velocity[j,k] = 1.0 / (q[j,k] + dtnext)
-                else:
-                    V0m1 = (
-                        (1.0 / velocity[j,k] + omKii / taudot[j,k])
-                        * np.exp(-taudot[j,k] * dtnext / aob)
-                        - omKii / taudot[j,k]
-                    )
-                    velocity[j,k] = 1.0 / V0m1
-            else:
-                if (j, k) == (jj, kk):
-                    Dtaup[j,k] = min(Dtaupmin, -overshoot*Dtau[j,k])
-                else:
-                    slip[j,k] += Veq_n * dtnext
-                q[j,k] = 1.0 / Veq_n
-        
-            taudot[j,k] += ico * Veq_n * Kjk[abs(jj-j), abs(kk-k)]
+    taudot1 = np.zeros((my, nx), dtype = np.float64)
+    for i in range(number_1):
+        jj = state_j[1, i]
+        kk = state_k[1, i]
+        jstart = my - jj - 1
+        kstart = nx - kk - 1
+        if velocity[jj, kk] <= V_c:
+            continue
+        for j in range(my):
+            for k in range(nx):
+                if j == jj and k == kk:
+                    continue
+                taudot1[j, k] += velocity[jj, kk] * K_sym[jstart + j, kstart + k]
 
-    return dtnext, jj, kk, Dtau, taudot, indx, velocity, q, slip, taudot_jk
+        # taudot1[jj, kk] -= velocity[jj, kk] * Kii
+
+    return taudot1
 
 if __name__ == "__main__":
 
-    folder = '../results/RSQSim_stage1/test10/'
-    
-    # prepare the kernel function and stress
-    start = time.time()
-    Kjk, taudot = prep(folder)
-    end = time.time()
-    print(f"time for preparation:{end-start :.4f} seconds")
+    folder = '../results/RSQSim_stage3/test_v3_2/'
 
     params = json.load(open(folder + 'parameters.json'))
     param_r, param_e, param_m = params['region'], params['elastic'], params['model']
     Veq, Vpl, my, nx = param_e['V_eq'], param_e['V_pl'], param_r['my'], param_r['nx']
     a, b, overshoot, Dtaupmin = param_e['a'], param_e['b'], param_e['overshoot'], param_e['Dtaupmin']
     aob, Veq_n = a/b, Veq / Vpl  # non-dimensionalize the velocity
+    
+    # prepare the kernel function and stress
+    start = time.time()
+    Kjk, taudot0 = prep(folder)
+    end = time.time()
+    print(f"time for preparation:{end-start :.4f} seconds")
+
+    K_sym = mirror(Kjk)
+    taudot1 = np.zeros((my, nx), dtype=np.float64)
+    taudot2 = np.zeros((my, nx), dtype=np.float64)
+    taudot = taudot0 + taudot1 + taudot2
 
     # initialize stress
     np.random.seed(1)
@@ -164,11 +195,16 @@ if __name__ == "__main__":
     # initiation inside the simulation
     istep_record = param_m['step_record']
     tim = 0.0
-    nucleation_number = 0
-    slip_number = 0
     istep = 0
 
     indx, velocity, q = initiate(my, nx, Veq_n)
+    state_j = np.zeros((3, my * nx), dtype=np.int64)
+    state_k = np.zeros((3, my * nx), dtype=np.int64)
+    state_j[0, :] = np.arange(my * nx) // nx
+    state_k[0, :] = np.arange(my * nx) % nx 
+    state_n = np.array([my*nx, 0, 0], dtype=np.int64)
+    flag_use = False
+    ico_label = [-1, 0, 1]
 
     # initiation about plotting the slip profile
     size_rec = param_m['size_rec']
@@ -190,37 +226,42 @@ if __name__ == "__main__":
     start = time.time()
     while istep < istep_record:
 
-        # # I feel like something should change if one big characteristic event finishes
-        # if slip_number == 0:
-        #     continue 
+        dtnext, ii, idx_to_change, Dtau, velocity, q, slip = update_step(state_j, state_k, state_n, 
+                                                            Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
+                                                            my, nx, overshoot, Dtaupmin, aob, Veq_n)
 
-        dtnext, jj, kk, Dtau, taudot, indx, velocity, q, slip, taudot_jk = update_step(indx, Dtau, Dtaup, taudot, velocity, q, Kjk, slip,
-                                                                            my, nx, overshoot, Dtaupmin, aob, Veq_n)
+        jj = state_j[idx_to_change, ii]
+        kk = state_k[idx_to_change, ii]
+        taudot_jk = taudot[jj, kk]
         
         tim += dtnext
 
         times_np[istep] = tim
         outfile_np[istep, 0] = jj
         outfile_np[istep, 1] = kk
-        outfile_np[istep, 2] = indx[jj, kk]
-        outfile_np[istep, 3] = slip_number # the number of elements that are at state 2
-        outfile_np[istep, 4] = nucleation_number # the number of elements that are at state 1
+        outfile_np[istep, 2] = (idx_to_change + 1)%3
+        outfile_np[istep, 3] = state_n[2] # the number of elements that are at state 2
+        outfile_np[istep, 4] = state_n[1] # the number of elements that are at state 1
         stress_np[istep] = Dtau[jj, kk]
         dtauodt_np[istep] = taudot_jk
-        
-        if indx[jj, kk] == 2:
-            slip_number += 1
-            nucleation_number -= 1
-        elif indx[jj, kk] == 1:
-            nucleation_number += 1
-        else:
-            slip_number -= 1
 
-        mask_nuc = indx == 1
-        nuc_MR_np[istep] = velocity[mask_nuc].sum()
+        state_j[idx_to_change, ii] = state_j[idx_to_change, state_n[idx_to_change]-1]
+        state_k[idx_to_change, ii] = state_k[idx_to_change, state_n[idx_to_change]-1]
+        state_n[idx_to_change] -= 1
+        idx_to_change = (idx_to_change+1)%3
+        state_j[idx_to_change, state_n[idx_to_change]] = jj
+        state_k[idx_to_change, state_n[idx_to_change]] = kk
+        state_n[idx_to_change] += 1
+
+        ico = ico_label[idx_to_change]
+        taudot2 = update_stress_rate2(taudot2, ico * Veq_n, jj, kk, K_sym)
+        taudot1 = update_stress_rate1(K_sym, Kjk[0, 0], velocity, state_j, state_k, state_n[1], 0.1 * Veq_n)
+        taudot = taudot0 + taudot1 + taudot2
         
         if dtnext < 0:
             print('Wrong!')
+
+        nuc_MR_np[istep] = velocity[state_j[1, :state_n[1]], state_k[1, :state_n[1]]].sum()
 
         if istep % size_rec ==0:
             slip_plot[iplotslip] = np.mean(slip, axis=0)
@@ -251,3 +292,4 @@ if __name__ == "__main__":
     stress_plot = stress_plot[:iplotslip]
     slip_time = slip_time[:iplotslip]
     np.savez(folder + 'slip_plot.npz', slip_time = slip_time, slip_plot = slip_plot, stress_plot=stress_plot)
+
